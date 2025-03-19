@@ -1,0 +1,15 @@
+{
+    "paths": {
+        "telegram_download_dir": "/path/to/telegram/downloads",
+        "movies_dir": "/path/to/jellyfin/movies",
+        "tv_shows_dir": "/path/to/jellyfin/tvshows",
+        "unmatched_dir": "/path/to/unmatched"
+    },
+    "tmdb": {
+        "api_key": "YOUR_TMDB_API_KEY"
+    },
+    "telegram": {
+        "bot_token": "YOUR_TELEGRAM_BOT_TOKEN",
+        "enabled": false
+    }
+}

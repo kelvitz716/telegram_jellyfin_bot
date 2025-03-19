@@ -1,0 +1,4 @@
+:memory:.session
+:memory:.session-journal
+media_categorizer.log
+media_watcher.log

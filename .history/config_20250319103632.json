@@ -1,0 +1,20 @@
+{
+    "paths": {
+        "telegram_download_dir": "/path/to/telegram/downloads",
+        "movies_dir": "/home/kelvitz/Videos/Jellyfin/Movies",
+        "tv_shows_dir": "/home/kelvitz/Videos/Jellyfin/TV Shows",
+        "unmatched_dir": "/home/kelvitz/Videos/Jellyfin/Unmatched"
+    },
+    "tmdb": {
+        "YOUR_TMDB_API_KEY": "9bff30355935e6a42153d1999e784794"
+    },
+    "telegram": {
+        "YOUR_BOT_TOKEN": "7717230409:AAEtWjrSMPrQVFQRD9TQj97tjcz0tvJ6R4Q",
+        "YOUR_API_HASH": "df5c5933c2f024278cfa1613661685e7",
+        "YOUR_API_ID": "29626522",
+        "enabled": false
+    },
+    "logging": {
+        "level": "INFO"
+    }
+}

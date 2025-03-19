@@ -1,0 +1,4 @@
+requests>=2.31.0
+python-telegram-bot>=13.7
+pathlib>=1.0.1
+typing>=3.7.4.3
