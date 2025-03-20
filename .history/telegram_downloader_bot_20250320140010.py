@@ -14,7 +14,6 @@ from telethon import TelegramClient
 import asyncio
 from collections import deque
 from dataclasses import dataclass, field
-from utils import telegram_message_limiter
 
 # Configuration
 CONFIG_FILE = "config.json"
@@ -118,7 +117,7 @@ class ProgressTracker:
         self.batch_id = batch_id
         self.position = position
         self.total_files = total_files
-        
+        self.rate_limiter = RateLimiter()
 
     def update(self, chunk_size):
         self.downloaded += chunk_size
@@ -126,12 +125,12 @@ class ProgressTracker:
         current_time = time.time()
         if (current_time - self.last_update > self.update_interval and 
             self.active and 
-            telegram_message_limiter.can_update(self.chat_id)):
+            self.rate_limiter.can_update(self.chat_id)):
             self.last_update = current_time
             self.send_progress()
             
     def send_progress(self):
-        """Send batch progress update"""
+        
         try:
             if not self.active:
                 return
@@ -162,7 +161,7 @@ class ProgressTracker:
             
             # Update message if changed and rate limited
             if (message != getattr(self, "_last_progress_message", "") and 
-                telegram_message_limiter.can_update(self.chat_id)):
+                self.rate_limiter.can_update(self.chat_id)):
                 self.bot.edit_message_text(
                     chat_id=self.chat_id,
                     message_id=self.message_id,
@@ -202,10 +201,7 @@ class ProgressTracker:
             else:
                 message = f"❌ Download failed. {batch_info}{self.file_name}"
                 
-            # Wait if being rate limited
-            telegram_message_limiter.wait_if_needed(f"notify_{self.bot_token}")
-            
-            # Final completion message
+            # Final completion message ignores rate limiting
             self.bot.edit_message_text(
                 chat_id=self.chat_id,
                 message_id=self.message_id,
@@ -240,7 +236,7 @@ class BatchProgressTracker:
         current_time = time.time()
         if (current_time - self.last_update > self.update_interval and 
             self.active and 
-            telegram_message_limiter.can_update(self.chat_id)):
+            self.rate_limiter.can_update(self.chat_id)):
             self.last_update = current_time
             self.send_progress()
 
@@ -268,7 +264,7 @@ class BatchProgressTracker:
             
             # Update message if changed and rate limited
             if (message != getattr(self, "_last_progress_message", "") and 
-                telegram_message_limiter.can_update(self.chat_id)):
+                self.rate_limiter.can_update(self.chat_id)):
                 self.bot.edit_message_text(
                     chat_id=self.chat_id,
                     message_id=self.message_id,
@@ -323,7 +319,10 @@ class TelegramDownloader:
         # Initialize Telegram bot
         self.bot_token = self.config["telegram"]["bot_token"]
         self.api_id = self.config["telegram"]["api_id"]
-        self.api_hash = self.config["telegram"]["api_hash"] 
+        self.api_hash = self.config["telegram"]["api_hash"]
+
+        # Rate limiter for message updates
+        self.rate_limiter = RateLimiter()
         
         # Download settings
         self.chunk_size = self.config["download"]["chunk_size"]

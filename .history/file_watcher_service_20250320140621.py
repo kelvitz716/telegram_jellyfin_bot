@@ -14,7 +14,6 @@ from difflib import SequenceMatcher
 from typing import Dict, Tuple, Optional, List, Any
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-from utils import telegram_message_limiter, api_rate_limiter
 
 # Configuration
 CONFIG_FILE = "config.json"
@@ -139,7 +138,7 @@ class MediaCategorizer:
         elif method == "telegram":
             try:
                 # Wait if being rate limited
-                telegram_message_limiter.wait_if_needed(f"notify_{self.bot_token}")
+            telegram_message_limiter.wait_if_needed(f"notify_{self.bot_token}")
             
                 telegram_config = self.config["notification"].get("telegram", {})
                 bot_token = telegram_config.get("bot_token")

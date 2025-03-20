@@ -14,7 +14,6 @@ from telethon import TelegramClient
 import asyncio
 from collections import deque
 from dataclasses import dataclass, field
-from utils import telegram_message_limiter
 
 # Configuration
 CONFIG_FILE = "config.json"
@@ -202,10 +201,7 @@ class ProgressTracker:
             else:
                 message = f"❌ Download failed. {batch_info}{self.file_name}"
                 
-            # Wait if being rate limited
-            telegram_message_limiter.wait_if_needed(f"notify_{self.bot_token}")
-            
-            # Final completion message
+            # Final completion message ignores rate limiting
             self.bot.edit_message_text(
                 chat_id=self.chat_id,
                 message_id=self.message_id,
@@ -240,7 +236,7 @@ class BatchProgressTracker:
         current_time = time.time()
         if (current_time - self.last_update > self.update_interval and 
             self.active and 
-            telegram_message_limiter.can_update(self.chat_id)):
+            self.rate_limiter.can_update(self.chat_id)):
             self.last_update = current_time
             self.send_progress()
 
@@ -268,7 +264,7 @@ class BatchProgressTracker:
             
             # Update message if changed and rate limited
             if (message != getattr(self, "_last_progress_message", "") and 
-                telegram_message_limiter.can_update(self.chat_id)):
+                self.rate_limiter.can_update(self.chat_id)):
                 self.bot.edit_message_text(
                     chat_id=self.chat_id,
                     message_id=self.message_id,

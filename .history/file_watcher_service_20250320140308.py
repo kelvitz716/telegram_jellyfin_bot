@@ -14,7 +14,6 @@ from difflib import SequenceMatcher
 from typing import Dict, Tuple, Optional, List, Any
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-from utils import telegram_message_limiter, api_rate_limiter
 
 # Configuration
 CONFIG_FILE = "config.json"
@@ -138,9 +137,6 @@ class MediaCategorizer:
 
         elif method == "telegram":
             try:
-                # Wait if being rate limited
-                telegram_message_limiter.wait_if_needed(f"notify_{self.bot_token}")
-            
                 telegram_config = self.config["notification"].get("telegram", {})
                 bot_token = telegram_config.get("bot_token")
                 chat_id = telegram_config.get("chat_id")
@@ -173,9 +169,20 @@ class MediaCategorizer:
             except Exception as e:
                 print(f"Failed to send Telegram notification: {str(e)}")
     
+    def _throttle_api_request(self):
+        """Throttle API requests to avoid hitting rate limits."""
+        current_time = time.time()
+        elapsed = current_time - self.api_last_request
+        
+        if elapsed < self.api_min_interval:
+            sleep_time = self.api_min_interval - elapsed
+            time.sleep(sleep_time)
+            
+        self.api_last_request = time.time()
+    
     def _make_tmdb_request(self, url: str, params: Dict[str, Any], retry_count: int = 1) -> Dict[str, Any]:
         """Make a request to TMDb API with rate limiting and retries."""
-        api_rate_limiter()
+        self._throttle_api_request()
         
         try:
             print(f"   > Making TMDb API request to: {url.split('/')[-1]}")

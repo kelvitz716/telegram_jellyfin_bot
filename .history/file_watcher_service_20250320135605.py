@@ -14,7 +14,6 @@ from difflib import SequenceMatcher
 from typing import Dict, Tuple, Optional, List, Any
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-from utils import telegram_message_limiter, api_rate_limiter
 
 # Configuration
 CONFIG_FILE = "config.json"
@@ -138,9 +137,6 @@ class MediaCategorizer:
 
         elif method == "telegram":
             try:
-                # Wait if being rate limited
-                telegram_message_limiter.wait_if_needed(f"notify_{self.bot_token}")
-            
                 telegram_config = self.config["notification"].get("telegram", {})
                 bot_token = telegram_config.get("bot_token")
                 chat_id = telegram_config.get("chat_id")
@@ -175,7 +171,7 @@ class MediaCategorizer:
     
     def _make_tmdb_request(self, url: str, params: Dict[str, Any], retry_count: int = 1) -> Dict[str, Any]:
         """Make a request to TMDb API with rate limiting and retries."""
-        api_rate_limiter()
+        self._throttle_api_request()
         
         try:
             print(f"   > Making TMDb API request to: {url.split('/')[-1]}")
@@ -630,21 +626,21 @@ class MediaCategorizer:
         """Process a single file."""
         try:
             filename = os.path.basename(filepath)
-            
+
             # Skip non-video files
             if not self.is_video_file(filepath):
                 return False
-            
+
             # Initial notification
             print("\nProcessing new file:", filename)
             self.notify(f"📝 Started processing new file:\n<b>{filename}</b>", "info")
-            
+
             # Check if file is still being modified
             try:
                 file_size_before = os.path.getsize(filepath)
                 time.sleep(1)
                 file_size_after = os.path.getsize(filepath)
-                
+
                 if file_size_before != file_size_after:
                     print(f"   > File is still being modified: {filename}")
                     self.notify(f"⏳ File is still being modified:\n<b>{filename}</ b>\nWill process later.", "warning")
@@ -653,16 +649,16 @@ class MediaCategorizer:
                 print(f"   > File disappeared: {filename}")
                 self.notify(f"❌ File disappeared while checking:\n<b>{filename}</b>",  "error")
                 return False
-            
+
             # Step 1: Initial categorization
             media_type, metadata = self.initial_categorization(filename)
             print(f"   > Initial categorization: {media_type}")
             progress_msg = f"🔍 Analyzing file:\n<b>{filename}</b>\nInitial type: <i>   {media_type}</i>"
             self.notify(progress_msg, "progress")
-            
+
             # Step 2: TMDb verification
             confirmed_type, enhanced_metadata = self.verify_with_tmdb(media_type,   metadata)
-            
+
             # Format TMDb results message
             if confirmed_type == "movie":
                 details = (f"🎬 Identified as Movie:\n"
@@ -677,9 +673,9 @@ class MediaCategorizer:
                           f"First Air Date: {enhanced_metadata.get('first_air_date',    'Unknown')}")
             else:
                 details = f"❓ Unable to identify media type:\n<b>{filename}</b>"
-            
+
             self.notify(details, "info")
-            
+
             # Step 3: Move to library
             if self.move_to_jellyfin_library(filepath, confirmed_type,  enhanced_metadata):
                 success_msg = (f"✅ Successfully processed:\n"
@@ -691,12 +687,12 @@ class MediaCategorizer:
                 error_msg = f"❌ Failed to process:\n<b>{filename}</b>"
                 self.notify(error_msg, "error")
                 return False
-                
+
         except Exception as e:
             error_msg = f"❌ Error processing:\n<b>{filename}</b>\n{str(e)}"
             self.notify(error_msg, "error")
             return False
-    
+
 class FileEventHandler(FileSystemEventHandler):
     def __init__(self, categorizer):
         self.categorizer = categorizer

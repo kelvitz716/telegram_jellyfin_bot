@@ -14,7 +14,6 @@ from difflib import SequenceMatcher
 from typing import Dict, Tuple, Optional, List, Any
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-from utils import telegram_message_limiter, api_rate_limiter
 
 # Configuration
 CONFIG_FILE = "config.json"

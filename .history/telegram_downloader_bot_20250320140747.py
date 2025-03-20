@@ -202,10 +202,8 @@ class ProgressTracker:
             else:
                 message = f"❌ Download failed. {batch_info}{self.file_name}"
                 
-            # Wait if being rate limited
-            telegram_message_limiter.wait_if_needed(f"notify_{self.bot_token}")
-            
             # Final completion message
+            
             self.bot.edit_message_text(
                 chat_id=self.chat_id,
                 message_id=self.message_id,
