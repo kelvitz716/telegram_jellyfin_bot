@@ -63,7 +63,7 @@ class MediaCategorizer:
         self._setup_directories()
         
         # Initialize TMDb API client
-        self.tmdb_api_key = self.config["tmdb"]["YOUR_TMDB_API_KEY"]
+        self.tmdb_api_key = self.config["tmdb"]["api_key"]
         self.api_last_request = 0
         self.api_min_interval = 0.25  # 250ms between requests (4 requests per second)
         

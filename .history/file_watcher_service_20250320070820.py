@@ -63,7 +63,7 @@ class MediaCategorizer:
         self._setup_directories()
         
         # Initialize TMDb API client
-        self.tmdb_api_key = self.config["tmdb"]["YOUR_TMDB_API_KEY"]
+        self.tmdb_api_key = self.config["tmdb"]["api_key"]
         self.api_last_request = 0
         self.api_min_interval = 0.25  # 250ms between requests (4 requests per second)
         
@@ -106,7 +106,7 @@ class MediaCategorizer:
     
     def _setup_directories(self):
         """Create necessary directories if they don't exist."""
-        self.download_dir = self.config["paths"]["telegram_download_dir"]
+        self.download_dir = self.config["paths"]["download_dir"]
         self.movies_dir = self.config["paths"]["movies_dir"]
         self.tv_shows_dir = self.config["paths"]["tv_shows_dir"]
         self.unmatched_dir = self.config["paths"]["unmatched_dir"]
