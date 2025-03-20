@@ -34,11 +34,8 @@ DEFAULT_CONFIG = {
     },
     "notification": {
         "enabled": True,
-        "method": "telegram",  # Options: "print", "telegram", "pushbullet"
-        "telegram": {
-            "bot_token": "bot_token",
-            "chat_id": "chat_id"
-        }
+        "method": "telegram"  # Options: "print", "telegram", "pushbullet"
+        
     },
     "process_existing_files": True
 }
@@ -125,49 +122,16 @@ class MediaCategorizer:
         print(f"TV Shows will be saved to: {os.path.abspath(self.tv_shows_dir)}")
         print(f"Unmatched content will be saved to: {os.path.abspath(self.unmatched_dir)}")
     
-    def notify(self, message: str, level: str = "info"):
+    def notify(self, message: str):
         """Send notification based on configuration."""
         if not self.config["notification"].get("enabled", False):
             return
-
+            
         method = self.config["notification"].get("method", "print")
-
+        
         if method == "print":
             print(f"\n[NOTIFICATION] {message}")
-
-        elif method == "telegram":
-            try:
-                telegram_config = self.config["notification"].get("telegram", {})
-                bot_token = telegram_config.get("bot_token")
-                chat_id = telegram_config.get("chat_id")
-
-                if not bot_token or not chat_id:
-                    print("Telegram configuration incomplete")
-                    return
-
-                # Format message based on level
-                emoji = {
-                    "info": "ℹ️",
-                    "success": "✅",
-                    "warning": "⚠️",
-                    "error": "❌",
-                    "progress": "🔄"
-                }.get(level, "ℹ️")
-
-                formatted_message = f"{emoji} {message}"
-
-                url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-                params = {
-                    "chat_id": chat_id,
-                    "text": formatted_message,
-                    "parse_mode": "HTML"
-                }
-
-                response = requests.get(url, params=params)
-                response.raise_for_status()
-
-            except Exception as e:
-                print(f"Failed to send Telegram notification: {str(e)}")
+        # Additional notification methods could be added here
     
     def _throttle_api_request(self):
         """Throttle API requests to avoid hitting rate limits."""
@@ -640,70 +604,62 @@ class MediaCategorizer:
             
             # Skip non-video files
             if not self.is_video_file(filepath):
+                self.logger.debug(f"Skipping non-video file: {filename}")
                 return False
-            
-            # Initial notification
-            print("\nProcessing new file:", filename)
-            self.notify(f"📝 Started processing new file:\n<b>{filename}</b>", "info")
-            
-            # Check if file is still being modified
+                
+            # Skip files that are still being modified
             try:
+                print(f"\n=== Checking if file is still being modified: {filename} ===")
                 file_size_before = os.path.getsize(filepath)
-                time.sleep(1)
+                time.sleep(1)  # Wait a moment
                 file_size_after = os.path.getsize(filepath)
                 
                 if file_size_before != file_size_after:
-                    print(f"   > File is still being modified: {filename}")
-                    self.notify(f"⏳ File is still being modified:\n<b>{filename}</ b>\nWill process later.", "warning")
+                    self.logger.info(f"File {filename} is still being modified. Will process later.")
+                    print(f"File {filename} is still being modified. Will process later.")
                     return False
             except FileNotFoundError:
-                print(f"   > File disappeared: {filename}")
-                self.notify(f"❌ File disappeared while checking:\n<b>{filename}</b>",  "error")
+                self.logger.warning(f"File disappeared during size check: {filename}")
+                print(f"File disappeared during size check: {filename}")
                 return False
+                
+            print(f"\n{'='*80}")
+            print(f"PROCESSING NEW FILE: {filename}")
+            print(f"{'='*80}")
             
-            # Step 1: Initial categorization
+            self.notify(f"Processing new file: {filename}")
+            self.logger.info(f"Processing: {filepath}")
+            
+            # Step 1: Initial categorization with regex
+            print("\n=== STEP 1: Initial Categorization ===")
             media_type, metadata = self.initial_categorization(filename)
-            print(f"   > Initial categorization: {media_type}")
-            progress_msg = f"🔍 Analyzing file:\n<b>{filename}</b>\nInitial type: <i>   {media_type}</i>"
-            self.notify(progress_msg, "progress")
+            self.logger.info(f"Initial categorization: {filename} -> {media_type}")
+            self.notify(f"Initial categorization: {filename} as {media_type}")
             
-            # Step 2: TMDb verification
-            confirmed_type, enhanced_metadata = self.verify_with_tmdb(media_type,   metadata)
+            # Step 2: Verify/enhance with TMDb API
+            print("\n=== STEP 2: TMDb Verification ===")
+            confirmed_type, enhanced_metadata = self.verify_with_tmdb(media_type, metadata)
+            self.logger.info(f"Confirmed categorization: {filename} -> {confirmed_type}")
+            self.notify(f"Confirmed categorization: {filename} as {confirmed_type}")
             
-            # Format TMDb results message
-            if confirmed_type == "movie":
-                details = (f"🎬 Identified as Movie:\n"
-                          f"<b>{enhanced_metadata.get('movie_name')}</b>\n"
-                          f"Year: {enhanced_metadata.get('year', 'Unknown')}\n"
-                          f"Overview: {enhanced_metadata.get('overview', 'N/A') [:200]}...")
-            elif confirmed_type == "tv":
-                details = (f"📺 Identified as TV Show:\n"
-                          f"<b>{enhanced_metadata.get('show_name')}</b>\n"
-                          f"Season: {enhanced_metadata.get('season', '?')}\n"
-                          f"Episode: {enhanced_metadata.get('episode', '?')}\n"
-                          f"First Air Date: {enhanced_metadata.get('first_air_date',    'Unknown')}")
-            else:
-                details = f"❓ Unable to identify media type:\n<b>{filename}</b>"
-            
-            self.notify(details, "info")
-            
-            # Step 3: Move to library
-            if self.move_to_jellyfin_library(filepath, confirmed_type,  enhanced_metadata):
-                success_msg = (f"✅ Successfully processed:\n"
-                             f"<b>{filename}</b>\n"
-                             f"Type: {confirmed_type}")
-                self.notify(success_msg, "success")
+            # Step 3: Move to appropriate library
+            print("\n=== STEP 3: Moving to Library ===")
+            if self.move_to_jellyfin_library(filepath, confirmed_type, enhanced_metadata):
+                self.notify(f"Successfully processed: {filename}")
+                print(f"\n✅ Successfully processed: {filename}")
                 return True
             else:
-                error_msg = f"❌ Failed to process:\n<b>{filename}</b>"
-                self.notify(error_msg, "error")
+                self.notify(f"Failed to process: {filename}")
+                print(f"\n❌ Failed to process: {filename}")
                 return False
                 
         except Exception as e:
-            error_msg = f"❌ Error processing:\n<b>{filename}</b>\n{str(e)}"
-            self.notify(error_msg, "error")
+            self.logger.error(f"Error processing {filepath}: {str(e)}")
+            self.notify(f"Error processing {os.path.basename(filepath)}: {str(e)}")
+            print(f"\n❌ Error processing {filepath}: {str(e)}")
             return False
-    
+
+
 class FileEventHandler(FileSystemEventHandler):
     def __init__(self, categorizer):
         self.categorizer = categorizer

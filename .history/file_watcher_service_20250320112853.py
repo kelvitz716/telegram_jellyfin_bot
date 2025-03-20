@@ -129,12 +129,12 @@ class MediaCategorizer:
         """Send notification based on configuration."""
         if not self.config["notification"].get("enabled", False):
             return
-
+            
         method = self.config["notification"].get("method", "print")
-
+        
         if method == "print":
             print(f"\n[NOTIFICATION] {message}")
-
+        
         elif method == "telegram":
             try:
                 telegram_config = self.config["notification"].get("telegram", {})
@@ -643,7 +643,6 @@ class MediaCategorizer:
                 return False
             
             # Initial notification
-            print("\nProcessing new file:", filename)
             self.notify(f"📝 Started processing new file:\n<b>{filename}</b>", "info")
             
             # Check if file is still being modified
@@ -653,17 +652,14 @@ class MediaCategorizer:
                 file_size_after = os.path.getsize(filepath)
                 
                 if file_size_before != file_size_after:
-                    print(f"   > File is still being modified: {filename}")
                     self.notify(f"⏳ File is still being modified:\n<b>{filename}</ b>\nWill process later.", "warning")
                     return False
             except FileNotFoundError:
-                print(f"   > File disappeared: {filename}")
                 self.notify(f"❌ File disappeared while checking:\n<b>{filename}</b>",  "error")
                 return False
             
             # Step 1: Initial categorization
             media_type, metadata = self.initial_categorization(filename)
-            print(f"   > Initial categorization: {media_type}")
             progress_msg = f"🔍 Analyzing file:\n<b>{filename}</b>\nInitial type: <i>   {media_type}</i>"
             self.notify(progress_msg, "progress")
             
@@ -672,16 +668,14 @@ class MediaCategorizer:
             
             # Format TMDb results message
             if confirmed_type == "movie":
-                details = (f"🎬 Identified as Movie:\n"
-                          f"<b>{enhanced_metadata.get('movie_name')}</b>\n"
-                          f"Year: {enhanced_metadata.get('year', 'Unknown')}\n"
-                          f"Overview: {enhanced_metadata.get('overview', 'N/A') [:200]}...")
+                details = f"🎬 Identified as Movie:\n" \
+                         f"<b>{enhanced_metadata.get('movie_name')}</b>\n" \
+                         f"Year: {enhanced_metadata.get('year', 'Unknown')}"
             elif confirmed_type == "tv":
-                details = (f"📺 Identified as TV Show:\n"
-                          f"<b>{enhanced_metadata.get('show_name')}</b>\n"
-                          f"Season: {enhanced_metadata.get('season', '?')}\n"
-                          f"Episode: {enhanced_metadata.get('episode', '?')}\n"
-                          f"First Air Date: {enhanced_metadata.get('first_air_date',    'Unknown')}")
+                details = f"📺 Identified as TV Show:\n" \
+                         f"<b>{enhanced_metadata.get('show_name')}</b>\n" \
+                         f"Season: {enhanced_metadata.get('season', '?')}\n" \
+                         f"Episode: {enhanced_metadata.get('episode', '?')}"
             else:
                 details = f"❓ Unable to identify media type:\n<b>{filename}</b>"
             
@@ -689,9 +683,9 @@ class MediaCategorizer:
             
             # Step 3: Move to library
             if self.move_to_jellyfin_library(filepath, confirmed_type,  enhanced_metadata):
-                success_msg = (f"✅ Successfully processed:\n"
-                             f"<b>{filename}</b>\n"
-                             f"Type: {confirmed_type}")
+                success_msg = f"✅ Successfully processed:\n" \
+                             f"<b>{filename}</b>\n" \
+                             f"Type: {confirmed_type}"
                 self.notify(success_msg, "success")
                 return True
             else:
@@ -703,7 +697,8 @@ class MediaCategorizer:
             error_msg = f"❌ Error processing:\n<b>{filename}</b>\n{str(e)}"
             self.notify(error_msg, "error")
             return False
-    
+
+
 class FileEventHandler(FileSystemEventHandler):
     def __init__(self, categorizer):
         self.categorizer = categorizer
