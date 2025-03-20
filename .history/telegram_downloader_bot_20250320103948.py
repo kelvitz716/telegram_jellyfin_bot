@@ -81,25 +81,6 @@ class DownloadTask:
     # Add timestamp for sorting/prioritization
     added_time: float = field(default_factory=time.time)
 
-class RateLimiter:
-    def __init__(self):
-        self.last_update = {}
-        self.min_interval = 2  # Minimum seconds between updates for each chat
-        self.lock = threading.Lock()
-        
-    def can_update(self, chat_id):
-        with self.lock:
-            now = time.time()
-            if chat_id not in self.last_update:
-                self.last_update[chat_id] = now
-                return True
-            
-            # Check if enough time has passed
-            if now - self.last_update[chat_id] >= self.min_interval:
-                self.last_update[chat_id] = now
-                return True
-            return False
-
 # Progress bar display
 class ProgressTracker:
     def __init__(self, total_size, bot, chat_id, message_id, update_interval=5, 
@@ -117,15 +98,12 @@ class ProgressTracker:
         self.batch_id = batch_id
         self.position = position
         self.total_files = total_files
-        self.rate_limiter = RateLimiter()
 
     def update(self, chunk_size):
         self.downloaded += chunk_size
         
         current_time = time.time()
-        if (current_time - self.last_update > self.update_interval and 
-            self.active and 
-            self.rate_limiter.can_update(self.chat_id)):
+        if current_time - self.last_update > self.update_interval and self.active:
             self.last_update = current_time
             self.send_progress()
             
@@ -158,9 +136,8 @@ class ProgressTracker:
                 f"Speed: {speed_text}"
             )
             
-            # Update message if changed and rate limited
-            if (message != getattr(self, "_last_progress_message", "") and 
-                self.rate_limiter.can_update(self.chat_id)):
+            # Update message
+            if message != getattr(self, "_last_progress_message", ""):
                 self.bot.edit_message_text(
                     chat_id=self.chat_id,
                     message_id=self.message_id,
@@ -200,7 +177,6 @@ class ProgressTracker:
             else:
                 message = f"❌ Download failed. {batch_info}{self.file_name}"
                 
-            # Final completion message ignores rate limiting
             self.bot.edit_message_text(
                 chat_id=self.chat_id,
                 message_id=self.message_id,
@@ -225,7 +201,6 @@ class BatchProgressTracker:
         self.active = True
         self.last_update = 0
         self.update_interval = 5
-        self.rate_limiter = RateLimiter()
 
     def update(self, downloaded=0, completed=0, failed=0):
         """Update batch progress"""
@@ -234,9 +209,7 @@ class BatchProgressTracker:
         self.failed_files += failed
         
         current_time = time.time()
-        if (current_time - self.last_update > self.update_interval and 
-            self.active and 
-            self.rate_limiter.can_update(self.chat_id)):
+        if current_time - self.last_update > self.update_interval and self.active:
             self.last_update = current_time
             self.send_progress()
 
@@ -262,9 +235,8 @@ class BatchProgressTracker:
                 f"Total Downloaded: {self._format_size(self.downloaded_bytes)}"
             )
             
-            # Update message if changed and rate limited
-            if (message != getattr(self, "_last_progress_message", "") and 
-                self.rate_limiter.can_update(self.chat_id)):
+            # Update message
+            if message != getattr(self, "_last_progress_message", ""):
                 self.bot.edit_message_text(
                     chat_id=self.chat_id,
                     message_id=self.message_id,
@@ -289,7 +261,6 @@ class BatchProgressTracker:
                 f"Time: {elapsed:.1f} seconds"
             )
             
-            # Final completion message ignores rate limiting
             self.bot.edit_message_text(
                 chat_id=self.chat_id,
                 message_id=self.message_id,
@@ -320,9 +291,6 @@ class TelegramDownloader:
         self.bot_token = self.config["telegram"]["bot_token"]
         self.api_id = self.config["telegram"]["api_id"]
         self.api_hash = self.config["telegram"]["api_hash"]
-
-        # Rate limiter for message updates
-        self.rate_limiter = RateLimiter()
         
         # Download settings
         self.chunk_size = self.config["download"]["chunk_size"]
@@ -1110,21 +1078,14 @@ class TelegramDownloader:
             f"⏳ Active downloads: {active}/{self.max_concurrent_downloads}\n"
             f"🔄 Queued files: {queued}"
         )
+        
 
     def run(self):
-        """Run the Telegram bot with timeout handling, connection checks, and proper exit."""
+        """Run the Telegram bot with timeout handling and automatic reconnection."""
         logger.info("Starting Telegram Downloader Bot")
         print("Bot started. Press Ctrl+C to exit.")
         
-        # Flag for controlled shutdown
-        self.running = True
-        
-        # Start connection check thread
-        check_thread = threading.Thread(target=self._connection_check)
-        check_thread.daemon = True
-        check_thread.start()
-        
-        while self.running:
+        while True:
             try:
                 logger.info("Starting bot polling...")
                 # Use timeout parameter and skip pending updates on reconnection
@@ -1132,10 +1093,6 @@ class TelegramDownloader:
                                interval=1, 
                                timeout=30,
                                skip_pending=True)
-            except KeyboardInterrupt:
-                logger.info("Received shutdown signal")
-                self.running = False
-                break
             except telebot.apihelper.ApiException as e:
                 logger.error(f"Telegram API error: {str(e)}")
                 time.sleep(5)  # Wait before retry on API error
@@ -1146,65 +1103,23 @@ class TelegramDownloader:
                 logger.error(f"Unexpected error in bot polling: {str(e)}")
                 time.sleep(3)  # Brief wait before retry
             finally:
-                if self.running:  # Only attempt reconnect if not shutting down
-                    try:
-                        self.bot.delete_webhook()
-                    except:
-                        pass
-                    logger.info("Bot disconnected, attempting to reconnect...")
-                    time.sleep(1)
-        
-        # Cleanup on exit
-        logger.info("Shutting down...")
-        try:
-            if self.client:
-                self.loop.run_until_complete(self.client.disconnect())
-            self.bot.stop_polling()
-        except Exception as e:
-            logger.error(f"Error during cleanup: {str(e)}")
-        
-        logger.info("Bot stopped")
-    
-    def _connection_check(self):
-        """Periodic connection check thread."""
-        while self.running:
-            try:
-                # Test connection by getting bot info
-                self.bot.get_me()
-                logger.debug("Connection check: OK")
-            except Exception as e:
-                logger.warning(f"Connection check failed: {str(e)}")
                 try:
-                    # Attempt to reset connection
+                    # Reset the bot's webhook to ensure clean reconnection
                     self.bot.delete_webhook()
                 except:
                     pass
-            finally:
-                # Sleep for 60 seconds before next check
-                for _ in range(60):
-                    if not self.running:
-                        break
-                    time.sleep(1)
+                
+                logger.info("Bot disconnected, attempting to reconnect...")
+                time.sleep(1)
+        
+        # Cleanup on exit
+        if self.client:
+            self.loop.run_until_complete(self.client.disconnect())
+        logger.info("Bot stopped")
 
 def main():
-    downloader = None
-    try:
-        downloader = TelegramDownloader()
-        downloader.run()
-    except KeyboardInterrupt:
-        print("\nReceived shutdown signal (Ctrl+C)")
-        if downloader:
-            # Set running flag to False to stop the bot properly
-            downloader.running = False
-            # Allow time for threads to clean up
-            print("Shutting down gracefully...")
-            time.sleep(2)
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        if downloader:
-            downloader.running = False
-    finally:
-        print("Bot stopped")
+    downloader = TelegramDownloader()
+    downloader.run()
 
 if __name__ == "__main__":
     main()

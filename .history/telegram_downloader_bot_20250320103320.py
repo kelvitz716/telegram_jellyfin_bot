@@ -81,25 +81,6 @@ class DownloadTask:
     # Add timestamp for sorting/prioritization
     added_time: float = field(default_factory=time.time)
 
-class RateLimiter:
-    def __init__(self):
-        self.last_update = {}
-        self.min_interval = 2  # Minimum seconds between updates for each chat
-        self.lock = threading.Lock()
-        
-    def can_update(self, chat_id):
-        with self.lock:
-            now = time.time()
-            if chat_id not in self.last_update:
-                self.last_update[chat_id] = now
-                return True
-            
-            # Check if enough time has passed
-            if now - self.last_update[chat_id] >= self.min_interval:
-                self.last_update[chat_id] = now
-                return True
-            return False
-
 # Progress bar display
 class ProgressTracker:
     def __init__(self, total_size, bot, chat_id, message_id, update_interval=5, 
@@ -117,15 +98,12 @@ class ProgressTracker:
         self.batch_id = batch_id
         self.position = position
         self.total_files = total_files
-        self.rate_limiter = RateLimiter()
 
     def update(self, chunk_size):
         self.downloaded += chunk_size
         
         current_time = time.time()
-        if (current_time - self.last_update > self.update_interval and 
-            self.active and 
-            self.rate_limiter.can_update(self.chat_id)):
+        if current_time - self.last_update > self.update_interval and self.active:
             self.last_update = current_time
             self.send_progress()
             
@@ -158,9 +136,8 @@ class ProgressTracker:
                 f"Speed: {speed_text}"
             )
             
-            # Update message if changed and rate limited
-            if (message != getattr(self, "_last_progress_message", "") and 
-                self.rate_limiter.can_update(self.chat_id)):
+            # Update message
+            if message != getattr(self, "_last_progress_message", ""):
                 self.bot.edit_message_text(
                     chat_id=self.chat_id,
                     message_id=self.message_id,
@@ -200,7 +177,6 @@ class ProgressTracker:
             else:
                 message = f"❌ Download failed. {batch_info}{self.file_name}"
                 
-            # Final completion message ignores rate limiting
             self.bot.edit_message_text(
                 chat_id=self.chat_id,
                 message_id=self.message_id,
@@ -225,7 +201,6 @@ class BatchProgressTracker:
         self.active = True
         self.last_update = 0
         self.update_interval = 5
-        self.rate_limiter = RateLimiter()
 
     def update(self, downloaded=0, completed=0, failed=0):
         """Update batch progress"""
@@ -234,9 +209,7 @@ class BatchProgressTracker:
         self.failed_files += failed
         
         current_time = time.time()
-        if (current_time - self.last_update > self.update_interval and 
-            self.active and 
-            self.rate_limiter.can_update(self.chat_id)):
+        if current_time - self.last_update > self.update_interval and self.active:
             self.last_update = current_time
             self.send_progress()
 
@@ -262,9 +235,8 @@ class BatchProgressTracker:
                 f"Total Downloaded: {self._format_size(self.downloaded_bytes)}"
             )
             
-            # Update message if changed and rate limited
-            if (message != getattr(self, "_last_progress_message", "") and 
-                self.rate_limiter.can_update(self.chat_id)):
+            # Update message
+            if message != getattr(self, "_last_progress_message", ""):
                 self.bot.edit_message_text(
                     chat_id=self.chat_id,
                     message_id=self.message_id,
@@ -289,7 +261,6 @@ class BatchProgressTracker:
                 f"Time: {elapsed:.1f} seconds"
             )
             
-            # Final completion message ignores rate limiting
             self.bot.edit_message_text(
                 chat_id=self.chat_id,
                 message_id=self.message_id,
@@ -320,9 +291,6 @@ class TelegramDownloader:
         self.bot_token = self.config["telegram"]["bot_token"]
         self.api_id = self.config["telegram"]["api_id"]
         self.api_hash = self.config["telegram"]["api_hash"]
-
-        # Rate limiter for message updates
-        self.rate_limiter = RateLimiter()
         
         # Download settings
         self.chunk_size = self.config["download"]["chunk_size"]
@@ -797,42 +765,45 @@ class TelegramDownloader:
             
         return status
     
-
-    async def _check_telethon_connection(self, max_retries=3):
-        """Check Telethon connection and reconnect if needed."""
-        retry_count = 0
-        while retry_count < max_retries:
-            try:
-                if not self.client.is_connected():
-                    logger.info("Telethon client disconnected, attempting to reconnect...")
-                    await self.client.connect()
+    async def _check_telethon_connection(self):
+        """Check and restore Telethon connection if needed."""
+        try:
+            if not self.client or not self.client.is_connected():
+                logger.info("Reconnecting Telethon client...")
+                if self.client:
+                    await self.client.disconnect()
+                
+                # Recreate session
+                session_file = "telegram_bot_session.session"
+                self.client = TelegramClient(
+                    session_file,
+                    self.api_id,
+                    self.api_hash,
+                    loop=self.loop
+                )
+                
+                await self.client.start(bot_token=self.bot_token)
                 
                 if not await self.client.is_user_authorized():
-                    logger.error("Telethon client is not authorized")
+                    logger.error("Failed to authorize Telethon client")
                     return False
                     
-                # Test connection with a simple request
-                me = await self.client.get_me()
-                if me:
-                    logger.debug("Telethon connection verified")
-                    return True
-                    
-            except Exception as e:
-                retry_count += 1
-                logger.warning(f"Telethon connection check failed (attempt {retry_count}/{max_retries}): {str(e)}")
-                if retry_count < max_retries:
-                    await asyncio.sleep(2 ** retry_count)  # Exponential backoff
-                    continue
-                    
+                logger.info("Telethon client reconnected successfully")
+                return True
+            return True
+        except Exception as e:
+            logger.error(f"Error reconnecting Telethon client: {str(e)}")
             return False
-        return False
 
     async def _download_with_telethon(self, message, file_path, progress_callback):
         """Download a file using Telethon for better large file handling."""
         try:
-            # Check and restore connection if needed
-            if not await self._check_telethon_connection():
-                logger.error("Failed to establish Telethon connection")
+            # Ensure client is connected
+            if not self.client.is_connected():
+                await self.client.connect()
+                
+            if not await self.client.is_user_authorized():
+                logger.error("Telethon client is not authorized. Cannot download large files.")
                 return False
                 
             # For message objects from Bot API, we need to get the real message via Telethon
@@ -847,42 +818,22 @@ class TelegramDownloader:
                 except Exception as e:
                     logger.error(f"Failed to get original message via Telethon: {str(e)}")
                     return False
-            
-            # Set up retries for download
-            max_download_retries = 3
-            retry_count = 0
-            
-            while retry_count < max_download_retries:
-                try:
-                    # Download the file
-                    downloaded_file = await self.client.download_media(
-                        message,
-                        file_path,
-                        progress_callback=progress_callback
-                    )
                     
-                    # Verify download
-                    if downloaded_file and os.path.exists(downloaded_file):
-                        logger.info(f"Telethon download successful: {downloaded_file}")
-                        return True
-                    else:
-                        raise Exception("No file was downloaded")
-                        
-                except Exception as e:
-                    retry_count += 1
-                    logger.warning(f"Download attempt {retry_count} failed: {str(e)}")
-                    
-                    if retry_count < max_download_retries:
-                        # Check connection before retry
-                        if not await self._check_telethon_connection():
-                            logger.error("Failed to reconnect Telethon client")
-                            return False
-                        await asyncio.sleep(2 ** retry_count)  # Exponential backoff
-                        continue
-                    else:
-                        logger.error(f"All download attempts failed after {max_download_retries} retries")
-                        return False
-                        
+            # Download the file
+            downloaded_file = await self.client.download_media(
+                message,
+                file_path,
+                progress_callback=progress_callback
+            )
+            
+            # Verify download
+            if downloaded_file and os.path.exists(downloaded_file):
+                logger.info(f"Telethon download successful: {downloaded_file}")
+                return True
+            else:
+                logger.error("Telethon download failed: No file was downloaded")
+                return False
+                
         except Exception as e:
             logger.error(f"Telethon download error: {str(e)}")
             return False
@@ -1112,19 +1063,11 @@ class TelegramDownloader:
         )
 
     def run(self):
-        """Run the Telegram bot with timeout handling, connection checks, and proper exit."""
+        """Run the Telegram bot with timeout handling and automatic reconnection."""
         logger.info("Starting Telegram Downloader Bot")
         print("Bot started. Press Ctrl+C to exit.")
         
-        # Flag for controlled shutdown
-        self.running = True
-        
-        # Start connection check thread
-        check_thread = threading.Thread(target=self._connection_check)
-        check_thread.daemon = True
-        check_thread.start()
-        
-        while self.running:
+        while True:
             try:
                 logger.info("Starting bot polling...")
                 # Use timeout parameter and skip pending updates on reconnection
@@ -1132,10 +1075,6 @@ class TelegramDownloader:
                                interval=1, 
                                timeout=30,
                                skip_pending=True)
-            except KeyboardInterrupt:
-                logger.info("Received shutdown signal")
-                self.running = False
-                break
             except telebot.apihelper.ApiException as e:
                 logger.error(f"Telegram API error: {str(e)}")
                 time.sleep(5)  # Wait before retry on API error
@@ -1146,65 +1085,23 @@ class TelegramDownloader:
                 logger.error(f"Unexpected error in bot polling: {str(e)}")
                 time.sleep(3)  # Brief wait before retry
             finally:
-                if self.running:  # Only attempt reconnect if not shutting down
-                    try:
-                        self.bot.delete_webhook()
-                    except:
-                        pass
-                    logger.info("Bot disconnected, attempting to reconnect...")
-                    time.sleep(1)
-        
-        # Cleanup on exit
-        logger.info("Shutting down...")
-        try:
-            if self.client:
-                self.loop.run_until_complete(self.client.disconnect())
-            self.bot.stop_polling()
-        except Exception as e:
-            logger.error(f"Error during cleanup: {str(e)}")
-        
-        logger.info("Bot stopped")
-    
-    def _connection_check(self):
-        """Periodic connection check thread."""
-        while self.running:
-            try:
-                # Test connection by getting bot info
-                self.bot.get_me()
-                logger.debug("Connection check: OK")
-            except Exception as e:
-                logger.warning(f"Connection check failed: {str(e)}")
                 try:
-                    # Attempt to reset connection
+                    # Reset the bot's webhook to ensure clean reconnection
                     self.bot.delete_webhook()
                 except:
                     pass
-            finally:
-                # Sleep for 60 seconds before next check
-                for _ in range(60):
-                    if not self.running:
-                        break
-                    time.sleep(1)
+                
+                logger.info("Bot disconnected, attempting to reconnect...")
+                time.sleep(1)
+        
+        # Cleanup on exit
+        if self.client:
+            self.loop.run_until_complete(self.client.disconnect())
+        logger.info("Bot stopped")
 
 def main():
-    downloader = None
-    try:
-        downloader = TelegramDownloader()
-        downloader.run()
-    except KeyboardInterrupt:
-        print("\nReceived shutdown signal (Ctrl+C)")
-        if downloader:
-            # Set running flag to False to stop the bot properly
-            downloader.running = False
-            # Allow time for threads to clean up
-            print("Shutting down gracefully...")
-            time.sleep(2)
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        if downloader:
-            downloader.running = False
-    finally:
-        print("Bot stopped")
+    downloader = TelegramDownloader()
+    downloader.run()
 
 if __name__ == "__main__":
     main()

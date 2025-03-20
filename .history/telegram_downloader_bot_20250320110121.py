@@ -117,15 +117,12 @@ class ProgressTracker:
         self.batch_id = batch_id
         self.position = position
         self.total_files = total_files
-        self.rate_limiter = RateLimiter()
 
     def update(self, chunk_size):
         self.downloaded += chunk_size
         
         current_time = time.time()
-        if (current_time - self.last_update > self.update_interval and 
-            self.active and 
-            self.rate_limiter.can_update(self.chat_id)):
+        if current_time - self.last_update > self.update_interval and self.active:
             self.last_update = current_time
             self.send_progress()
             
@@ -158,9 +155,8 @@ class ProgressTracker:
                 f"Speed: {speed_text}"
             )
             
-            # Update message if changed and rate limited
-            if (message != getattr(self, "_last_progress_message", "") and 
-                self.rate_limiter.can_update(self.chat_id)):
+            # Update message
+            if message != getattr(self, "_last_progress_message", ""):
                 self.bot.edit_message_text(
                     chat_id=self.chat_id,
                     message_id=self.message_id,
@@ -200,7 +196,6 @@ class ProgressTracker:
             else:
                 message = f"❌ Download failed. {batch_info}{self.file_name}"
                 
-            # Final completion message ignores rate limiting
             self.bot.edit_message_text(
                 chat_id=self.chat_id,
                 message_id=self.message_id,
@@ -225,7 +220,6 @@ class BatchProgressTracker:
         self.active = True
         self.last_update = 0
         self.update_interval = 5
-        self.rate_limiter = RateLimiter()
 
     def update(self, downloaded=0, completed=0, failed=0):
         """Update batch progress"""
@@ -234,9 +228,7 @@ class BatchProgressTracker:
         self.failed_files += failed
         
         current_time = time.time()
-        if (current_time - self.last_update > self.update_interval and 
-            self.active and 
-            self.rate_limiter.can_update(self.chat_id)):
+        if current_time - self.last_update > self.update_interval and self.active:
             self.last_update = current_time
             self.send_progress()
 
@@ -262,9 +254,8 @@ class BatchProgressTracker:
                 f"Total Downloaded: {self._format_size(self.downloaded_bytes)}"
             )
             
-            # Update message if changed and rate limited
-            if (message != getattr(self, "_last_progress_message", "") and 
-                self.rate_limiter.can_update(self.chat_id)):
+            # Update message
+            if message != getattr(self, "_last_progress_message", ""):
                 self.bot.edit_message_text(
                     chat_id=self.chat_id,
                     message_id=self.message_id,
@@ -289,7 +280,6 @@ class BatchProgressTracker:
                 f"Time: {elapsed:.1f} seconds"
             )
             
-            # Final completion message ignores rate limiting
             self.bot.edit_message_text(
                 chat_id=self.chat_id,
                 message_id=self.message_id,
@@ -321,8 +311,7 @@ class TelegramDownloader:
         self.api_id = self.config["telegram"]["api_id"]
         self.api_hash = self.config["telegram"]["api_hash"]
 
-        # Rate limiter for message updates
-        self.rate_limiter = RateLimiter()
+        
         
         # Download settings
         self.chunk_size = self.config["download"]["chunk_size"]
