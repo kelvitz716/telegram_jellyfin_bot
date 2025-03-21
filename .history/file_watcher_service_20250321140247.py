@@ -148,7 +148,7 @@ class MediaCategorizer:
                     return
                 
                 # Wait if being rate limited
-                telegram_message_limiter.wait_if_needed(f"notify_{bot_token}")
+                telegram_message_limiter.wait_if_needed(f"notify_{self.bot_token}")
 
                 # Format message based on level
                 emoji = {
@@ -170,12 +170,12 @@ class MediaCategorizer:
 
                 response = requests.get(url, params=params)
                 if response.status_code == 429:  # Rate limit hit
-                    retry_after = int(response.headers.get('Retry-After', 2))
-                    print(f"Rate limit hit, waiting {retry_after} seconds...")
-                    time.sleep(retry_after)
-                    # Retry the request
-                    response = requests.get(url, params=params)
-                response.raise_for_status()
+                retry_after = int(response.headers.get('Retry-After', 2))
+                print(f"Rate limit hit, waiting {retry_after} seconds...")
+                time.sleep(retry_after)
+                # Retry the request
+                response = requests.get(url, params=params)
+            response.raise_for_status()
 
             except Exception as e:
                 print(f"Failed to send Telegram notification: {str(e)}")

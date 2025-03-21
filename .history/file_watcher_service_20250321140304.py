@@ -148,7 +148,7 @@ class MediaCategorizer:
                     return
                 
                 # Wait if being rate limited
-                telegram_message_limiter.wait_if_needed(f"notify_{bot_token}")
+                telegram_message_limiter.wait_if_needed(f"notify_{self.bot_token}")
 
                 # Format message based on level
                 emoji = {

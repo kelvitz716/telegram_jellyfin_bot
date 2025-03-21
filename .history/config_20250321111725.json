@@ -29,8 +29,8 @@
         "enabled": true,
         "method": "telegram",
         "telegram": {
-            "bot_token": "7717230409:AAEtWjrSMPrQVFQRD9TQj97tjcz0tvJ6R4Q",
-            "chat_id": "618026357"
+            "bot_token": "YOUR_BOT_TOKEN",
+            "chat_id": "YOUR_CHAT_ID"
         }
     },
     "process_existing_files": true

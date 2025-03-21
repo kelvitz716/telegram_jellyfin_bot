@@ -138,7 +138,7 @@ class MediaCategorizer:
 
         elif method == "telegram":
             try:
-                # Get Telegram config           
+                #           
                 telegram_config = self.config["notification"].get("telegram", {})
                 bot_token = telegram_config.get("bot_token")
                 chat_id = telegram_config.get("chat_id")
@@ -146,9 +146,6 @@ class MediaCategorizer:
                 if not bot_token or not chat_id:
                     print("Telegram configuration incomplete")
                     return
-                
-                # Wait if being rate limited
-                telegram_message_limiter.wait_if_needed(f"notify_{bot_token}")
 
                 # Format message based on level
                 emoji = {
@@ -169,12 +166,6 @@ class MediaCategorizer:
                 }
 
                 response = requests.get(url, params=params)
-                if response.status_code == 429:  # Rate limit hit
-                    retry_after = int(response.headers.get('Retry-After', 2))
-                    print(f"Rate limit hit, waiting {retry_after} seconds...")
-                    time.sleep(retry_after)
-                    # Retry the request
-                    response = requests.get(url, params=params)
                 response.raise_for_status()
 
             except Exception as e:
@@ -182,7 +173,7 @@ class MediaCategorizer:
     
     def _make_tmdb_request(self, url: str, params: Dict[str, Any], retry_count: int = 1) -> Dict[str, Any]:
         """Make a request to TMDb API with rate limiting and retries."""
-        api_rate_limiter.wait_if_needed()
+        api_rate_limiter()
         
         try:
             print(f"   > Making TMDb API request to: {url.split('/')[-1]}")
