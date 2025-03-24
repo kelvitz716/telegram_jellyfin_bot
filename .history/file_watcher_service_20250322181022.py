@@ -613,7 +613,7 @@ class MediaCategorizer:
         update_recursive(validated, config)
         
         # Check TMDb API key
-        if not validated["tmdb"]["api_key"] or validated["tmdb"]["api_key"] == "api_key":
+        if not validated["tmdb"]["api_key"] or validated["tmdb"]["api_key"] == "YOUR_TMDB_API_KEY":
             print("WARNING: TMDb API key not configured. Media identification will fail.")
         
         # Set default directories if not specified
@@ -646,7 +646,7 @@ class MediaCategorizer:
     
     def _setup_directories(self):
         """Create necessary directories if they don't exist."""
-        self.download_dir = self.config["paths"]["telegram_download_dir"]
+        self.download_dir = self.config["paths"]["download_dir"]
         self.movies_dir = self.config["paths"]["movies_dir"]
         self.tv_shows_dir = self.config["paths"]["tv_shows_dir"]
         self.unmatched_dir = self.config["paths"]["unmatched_dir"]

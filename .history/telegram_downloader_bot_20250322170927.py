@@ -12,7 +12,6 @@ import logging
 import asyncio
 import random
 import hashlib
-import aiohttp
 import telebot
 import requests
 from typing import Dict, List, Optional, Union, Any, Set, Deque

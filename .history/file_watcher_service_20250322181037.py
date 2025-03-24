@@ -646,7 +646,7 @@ class MediaCategorizer:
     
     def _setup_directories(self):
         """Create necessary directories if they don't exist."""
-        self.download_dir = self.config["paths"]["telegram_download_dir"]
+        self.download_dir = self.config["paths"]["download_dir"]
         self.movies_dir = self.config["paths"]["movies_dir"]
         self.tv_shows_dir = self.config["paths"]["tv_shows_dir"]
         self.unmatched_dir = self.config["paths"]["unmatched_dir"]
