@@ -13,7 +13,8 @@
         "api_hash": "df5c5933c2f024278cfa1613661685e7",
         "api_id": "29626522",
         "chat_id": "618026357",
-        "enabled": false
+        "enabled": false,
+        "flood_sleep_threshold": 60
     },
     "logging": {
         "level": "INFO",
@@ -33,7 +34,8 @@
         "method": "telegram",
         "telegram": {
             "bot_token": "7717230409:AAEtWjrSMPrQVFQRD9TQj97tjcz0tvJ6R4Q",
-            "chat_id": "618026357"
+            "chat_id": "618026357",
+            "flood_sleep_threshold": 60
         }
     },
     "process_existing_files": true

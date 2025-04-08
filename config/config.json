@@ -1,0 +1,16 @@
+{
+    "paths": {
+        "download_dir": "/home/kelvitz/Videos/Telegram/Downloads",
+        "movies_dir": "/home/kelvitz/Videos/Jellyfin/Movies",
+        "tv_shows_dir": "/home/kelvitz/Videos/Jellyfin/TV Shows"
+    },
+    "telegram": {
+        "api_id": "29626522",
+        "api_hash": "df5c5933c2f024278cfa1613661685e7",
+        "bot_token": "7717230409:AAEtWjrSMPrQVFQRD9TQj97tjcz0tvJ6R4Q"
+    },
+    "apis": {
+        "tmdb_api_key": "9bff30355935e6a42153d1999e784794",
+        "omdb_api_key": null
+    }
+}
